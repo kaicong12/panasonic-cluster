@@ -60,6 +60,19 @@ if mode == "full":
         3.1.3 Each file under dataset has different res. , read res using ffprobe  ## need to assume cluster have FFMPEG3
 
 
+
+job_array=()
+for datatype in "${data_types[@]}"
+do
+   data_subset_table=filter_job(mode, datatype, data_range)
+   new_job_array=create_job_array(data_subset_table, qp)
+   job_array+=(${new_job_array[@]})
+done
+
+echo $job_array # check the constructed job_array
+
+dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
+
 ## task: object, structure: video%name%qp_value%intra_period%frame_rate%frames_num%frame_skip%dataset_dir%additional_param (-dph 1...)
 job_array=() # element; element.name; 
 for datatype in data_types:
