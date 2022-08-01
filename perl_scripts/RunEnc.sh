@@ -17,8 +17,8 @@ qp_sets=(
 
 declare -A additional_params
 additional_params=(
-    ["FLIR"]="-b $output_vvc -q $qp -o $output_yuv -fr 1 -f 1 -hgt $CUR_HGT -wdt $CUR_WDT --ConformanceWindowMode=1"
-    ["OpenImages"]="-b $bitstream -q $qp -o $output_yuv -fr 1 -f 1 -hgt $HGT -wdt $WDT --ConformanceWindowMode=1"
+    ["FLIR"]="-fr 1 -f 1--ConformanceWindowMode=1"
+    ["OpenImages"]="-fr 1 -f 1 --ConformanceWindowMode=1"
     ["SFU_HW"]=
     ["TVD_video"]
     ["TVD_image"]
