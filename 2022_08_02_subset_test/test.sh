@@ -55,16 +55,16 @@ done
 if [[ $mode == "subset" ]]; then
 
     rm -f filtered*
-    num_images=$(wc -l < ../gen_data_table/image_data.txt)
+    num_images=$(wc -l < image_data.txt)
     for data_index in $data_range;
     do  
         # index less than num_images means the current data refers to an image, otherwise its a video file
         if [[ $data_index -le $num_images-1 ]]; then
-            file="../gen_data_table/image_data.txt"
+            file="image_data.txt"
             cur_line="$(grep "^ $data_index" $file)"
             echo $cur_line >> "filtered_image_data.txt"
         else
-            file="../gen_data_table/video_data.txt"
+            file="video_data.txt"
             cur_line="$(grep "^ $data_index" $file)"
             echo $cur_line >> "filtered_video_data.txt"
         fi
@@ -97,6 +97,83 @@ function check_job_status() {
     fi
 }
 
+function compute_height_width() {
+    
+    dataset_name=$1
+    data_name=$2
+
+    if [[ $dataset_name == "OpenImages" ]]; then
+        # ffprobe command only works on PNG images not YUV
+        # for OpenImages dataset, we would need its PNG in the CTC dataset folder
+        png_path="$dataset_name/$data_name.png"
+        eval $(ffprobe -v error -of flat=s=_ -select_streams v:0 -show_entries stream=width,height $png_path)
+        width=${streams_stream_0_width}
+        height=${streams_stream_0_height}
+
+    elif [[ $dataset_name == "SFU_HW" ]]; then
+        height=
+
+    elif [[ $dataset_name == "FLIR" ]]; then
+        height=512
+        width=640    
+
+    elif [[ $dataset_name == "TVD" ]]; then
+        height=1080
+        width=1920
+}
+
+function generate_job() {
+    # this function pushes new jobs which have not been sent into job_array
+
+    data_id=$1
+    data_name=$2
+    qp_set=$3
+    dataset_name=$4
+    intra_period=$5
+    frame_rate=$6
+    frame_num=$7
+    frame_skip=$8
+
+    # populate qp_array
+    qp_array=(${qp_sets[$qp_set]})
+    filtered_qp_array=()
+    for index in ${QP[@]};
+    do
+        filtered_qp_array+=(${qp_array[$index]})
+    done
+    
+    # check if this job has been sent
+    for filtered_qp in $filtered_qp_array;
+    do
+
+        sent=false
+        # this function will update sent to true if this job has been sent
+        check_job_status $dataset_name $data_name $filtered_qp
+        if [[ $sent = false ]]; then
+            extra_params=${additional_params["$dataset_name"]}
+            echo $extra_params
+                            
+            # OpenImage binfiles have .266 as extension
+            binfile="bin_folder/$dataset_name/QP_$qp/$data_name.vvc"
+            if [[ $dataset_name == "OpenImages" ]]; then
+                binfile="bin_folder/$dataset_name/QP_$qp/$data_name.266"
+            fi
+            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
+            if [[ "$dataset_name" == *"TVD"* ]]; then
+                dataset_name="TVD"
+            fi
+            # compute height and width of current data_name
+            height=0
+            width=0
+            compute_height_width $dataset_name $data_name
+            
+            new_job="-i ../CTC_Dataset/$dataset_name/$data_name -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params"
+        fi
+    
+    done
+}
+
+
 job_array=()
 for file in ${data_files[@]};
 do 
@@ -115,9 +192,9 @@ do
             frame_rate=${items[5]}
             frame_num=${items[6]}
             frame_skip=${items[7]}
-            
-            config_file="cfg_folder/encoder_randomaccess_vtm.cfg"  # all video tasks share the RA VCM config file
 
+            generate_job $data_id $data_name $qp_set $dataset_name $intra_period $frame_rate $frame_num $frame_skip
+            
         else
             echo "File is a image file $file"
             
@@ -125,44 +202,8 @@ do
             data_name=${items[1]}
             qp_set=${items[2]}
             dataset_name=${items[3]}
-            config_file="cfg_folder/encoder_intra_vtm.cfg"  # all video tasks share the intra VCM config file
 
-            # populate qp_array
-            qp_array=(${qp_sets[$qp_set]})
-            filtered_qp_array=()
-            for index in ${QP[@]};
-            do
-                filtered_qp_array+=(${qp_array[$index]})
-            done
-            
-            # check if this job has been sent
-            for filtered_qp in $filtered_qp_array;
-            do
-
-                sent=false
-                # this function will update sent to true if this job has been sent
-                check_job_status $dataset_name $data_name $filtered_qp
-                if [[ $sent = false ]]; then
-                    extra_params=${additional_params["$dataset_name"]}
-                    echo $extra_params
-                                    
-                    # OpenImage binfiles have .266 as extension
-                    binfile="bin_folder/$dataset_name/QP_$qp/$data_name.vvc"
-                    if [[ $dataset_name == "OpenImages" ]]; then
-                        binfile="bin_folder/$dataset_name/QP_$qp/$data_name.266"
-                    fi
-                    # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
-                    if [[ "$dataset_name" == *"TVD"* ]]; then
-                        dataset_name="TVD"
-                    fi
-                    # compute height and width of current data_name
-
-                    
-
-                    new_job="-i ../CTC_Dataset/$dataset_name/$data_name -b $binfile -c $config_file"
-                fi
-            
-            done
+            generate_job $data_id $data_name $qp_set $dataset_name
 
         fi
         
