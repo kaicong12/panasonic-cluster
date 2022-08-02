@@ -78,8 +78,19 @@ dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
 test_folder=$(realpath ./) # get the absolute path of the shared network test_folder
 
 sendTask() {
-    task_command=$1
-    ssh $avai_pc_ip $test_folder/RunOne.sh -p $task_command # send the task comand to the available pc
+    task=$1 # <command>%<bin_location>%<log_name>
+    IFS='%' read -ra task_info <<< "$task" # split the task string with delimiter %
+    command=${task_info[0]} 
+    bin_location=${task_info[1]} 
+    log_name=${task_info[2]} 
+    echo $command
+    echo $bin_location
+    echo $log_name
+    mkdir -p $bin_location # create the bin_dir recursively
+    echo ./encoder ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
+
+    ssh $avai_pc_ip cd $test_folder # let the client machine goes to the shared network test_folder
+    ssh $avai_pc_ip RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
 }
 
 counter=0 # the number of jobs sent to the clients
