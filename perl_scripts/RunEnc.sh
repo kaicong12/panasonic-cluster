@@ -50,6 +50,7 @@ qp=[0,1,2,3,4,5]
 if mode == "full":
     qp = [0,1,2,3,4,5]
 
+job_array=()
 ##### Functions #####
 1. get_data_type() -> Array(2)
 2. filter_job(mode, type, data_range) -> returns [str]
@@ -64,7 +65,7 @@ if mode == "full":
 
 
 
-job_array=()
+
 for datatype in "${data_types[@]}"
 do
    filter_job $mode $datatype $data_range
