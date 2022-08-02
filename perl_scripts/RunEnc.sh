@@ -1,5 +1,6 @@
 #!/bin/bash
 
+client_pc=("pc0:ubuntu@192.168.1.222" "pc1:user@192.168.1.17" "pc2:ubuntu@192.168.1.130")
 # 1. Create all necessary information to parse user input
 # 2. Iterate through each row in the data table
 # 3. Parse user input
@@ -61,64 +62,118 @@ if mode == "full":
 
 
 
+
+
 job_array=()
 for datatype in "${data_types[@]}"
 do
-   data_subset_table=filter_job(mode, datatype, data_range)
-   new_job_array=create_job_array(data_subset_table, qp)
-   job_array+=(${new_job_array[@]})
+   filter_job $mode $datatype $data_range
+   create_job_array $data_subset_table $qp
 done
 
 echo $job_array # check the constructed job_array
 
 dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
+test_folder=$(realpath ./) # get the absolute path of the shared network test_folder
 
-## task: object, structure: video%name%qp_value%intra_period%frame_rate%frames_num%frame_skip%dataset_dir%additional_param (-dph 1...)
-job_array=() # element; element.name; 
-for datatype in data_types:
-    data_subset_table = filter_job(mode, datatype, data_range=None)
-    job_array.append(create_job_array(data_subset_table, qp))
-
-echo job_array # contains a list of objects (either video or image objects)
-
-dataset_diretory = "CTC"
-sendTask(task_object)
-    if task_object.type == "video":
-        file_path = os.patj.join(dataset_diretory, task_object.name)
-        parameters = "-i $file_path -qp ${task_object.qp} $additional_parameter"
-        ssh ... ./RunOne.sh -p "parameters"
-    else:
-        ./RunOne.sh -i -b -o
-
-counter = 0
-while counter < len(job_array) {
-    request_count = 0
-
-    while True:
-        sleep(2)
-
-        for pc in client_pc:
-            available = check_if_available(pc)
-            if available:
-                $avai_pc_ip = $pc
-                break [2]
-        
-        request_count += 1
-
-        if request_count >= 10:
-            break [2]
-
-    sendTask(job_array[counter])
-    counter += 1
-
-    if not exist (start.tim):
-        creeate the file                      
+sendTask() {
+    task_command=$1
+    ssh $avai_pc_ip $test_folder/RunOne.sh -p $task_command # send the task comand to the available pc
 }
 
-if counter == len(job_array):
-    create done.time
-else:
-    raise ("some task is not sent successfully")  # should never get triggered
+counter=0 # the number of jobs sent to the clients
+# echo ${#job_array[@]}
+while [ $counter -lt ${#job_array[@]} ] # main while loop
+do
+    request_count=0
+    while true # busy waiting for the available client pc
+    do
+        sleep 2 # request for available client pc every 2 sec
+        for pc in "${client_pc[@]}"
+        do  
+            pc_info=(${pc//:/ }) # split the pc information
+            pc_name=${pc_info[0]} 
+            pc_ip=${pc_info[1]} 
+            check_if_available $pc_name $pc_ip
+            if [ "$available" = true ] # $available comes from check_if_available()
+            then
+                echo "Assigned to ${pc_name}"
+                avai_pc_ip=$pc_ip
+                break[2] # break current for loop and the busy waiting while loop outside, back to the main while loop
+            fi
+        done
+
+        request_count=$(( $request_count + 1 ))
+        if [ $request_count -ge 10]
+        then
+            break[2] # quit the main while loop if wait for more than 20 sec for the machine
+        fi
+    done
+
+    echo counter is $counter
+    echo ${job_array[counter]} # for debugging: check current task command
+
+    sendTask ${job_array[counter]}
+    if [[ ! -f "start.tim" ]]
+    then
+        touch start.tim
+    fi
+    counter=$(( $counter + 1 )) # move to next task
+done
+
+if [ $counter -eq ${#job_array[@]} ]
+then
+    touch done.tim # all files have been sent to clients for compression
+else
+    echo "Some task is not sent successfully." # should never be triggered
+fi
+
+# ## task: object, structure: video%name%qp_value%intra_period%frame_rate%frames_num%frame_skip%dataset_dir%additional_param (-dph 1...)
+# job_array=() # element; element.name; 
+# for datatype in data_types:
+#     data_subset_table = filter_job(mode, datatype, data_range=None)
+#     job_array.append(create_job_array(data_subset_table, qp))
+
+# echo job_array # contains a list of objects (either video or image objects)
+
+# dataset_diretory = "CTC"
+# sendTask(task_object)
+#     if task_object.type == "video":
+#         file_path = os.patj.join(dataset_diretory, task_object.name)
+#         parameters = "-i $file_path -qp ${task_object.qp} $additional_parameter"
+#         ssh ... ./RunOne.sh -p "parameters"
+#     else:
+#         ./RunOne.sh -i -b -o
+
+# counter = 0
+# while counter < len(job_array) {
+#     request_count = 0
+
+#     while True:
+#         sleep(2)
+
+#         for pc in client_pc:
+#             available = check_if_available(pc)
+#             if available:
+#                 $avai_pc_ip = $pc
+#                 break [2]
+        
+#         request_count += 1
+
+#         if request_count >= 10:
+#             break [2]
+
+#     sendTask(job_array[counter])
+#     counter += 1
+
+#     if not exist (start.tim):
+#         create the file                      
+# }
+
+# if counter == len(job_array):
+#     create done.time
+# else:
+#     raise ("some task is not sent successfully")  # should never get triggered
 
 
 
