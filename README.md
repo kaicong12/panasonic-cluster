@@ -165,3 +165,50 @@ function generate_job() {
 
 ## Task distribution logic
 Follow same task distribution logic as the old perl script. Iterate through each job within the job_array and check for available pc to send the job to, if no available pc is found after 20 seconds, break out from this current test and move on to the next test.
+
+Code to send task are as below:
+<details>
+  <summary><b>Click to view code to send task</b></summary>
+
+```shell
+counter=0 # the number of jobs sent to the clients
+# echo ${#job_array[@]}
+while [ $counter -lt ${#job_array[@]} ] # main while loop
+do
+    request_count=0
+    while true # busy waiting for the available client pc
+    do
+        sleep 2 # request for available client pc every 2 sec
+        for pc in "${client_pc[@]}"
+        do  
+            pc_info=(${pc//:/ }) # split the pc information
+            pc_name=${pc_info[0]} 
+            pc_ip=${pc_info[1]} 
+            check_if_available $pc_name $pc_ip
+            if [ "$available" = true ] # $available comes from check_if_available()
+            then
+                echo "Assigned to ${pc_name}"
+                avai_pc_ip=$pc_ip
+                break[2] # break current for loop and the busy waiting while loop outside, back to the main while loop
+            fi
+        done
+
+        request_count=$(( $request_count + 1 ))
+        if [ $request_count -ge 10]
+        then
+            break[2] # quit the main while loop if wait for more than 20 sec for the machine
+        fi
+    done
+
+    echo counter is $counter
+    echo ${job_array[counter]} # for debugging: check current task command
+
+    sendTask ${job_array[counter]}
+    if [[ ! -f "start.tim" ]]
+    then
+        touch start.tim
+    fi
+    counter=$(( $counter + 1 )) # move to next task
+done
+```
+</details>
