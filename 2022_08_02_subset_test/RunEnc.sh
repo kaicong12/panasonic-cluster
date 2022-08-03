@@ -3,6 +3,8 @@
 # 1. Create all necessary information to parse user input
 # 2. Parse user input
 # 3. Iterate through each row in the data table
+# 4. Generate job_array
+# 5. Distribute each task within job_array to different client pc for compression
 
 
 # 1. Create all necessary information to parse user input
@@ -23,6 +25,7 @@ additional_params=(
     ["TVD_video"]="-c cfg/encoder_randomaccess_vtm.cfg --InputBitDepth=8 --ReconFile=/dev/null --PrintHexPSNR -v 6 --ConformanceWindowMode=1"  # took out -dph 1
     ["TVD_image"]="-c cfg/encoder_intra_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10"
 )
+
 
 
 # 2. Parse user input
@@ -92,39 +95,101 @@ function check_job_status() {
     fi
 }
 
+function generate_job() {
+    # this function pushes new jobs which have not been sent into job_array
+
+    data_id=$1
+    data_name=$2
+    qp_set=$3
+    dataset_name=$4
+    width=$5
+    height=$6
+    intra_period=$7
+    frame_rate=$8
+    frame_num=$9
+    frame_skip=$10
+
+    # populate qp_array
+    qp_array=(${qp_sets[$qp_set]})
+    filtered_qp_array=()
+    for index in ${QP[@]};
+    do
+        filtered_qp_array+=(${qp_array[$index]})
+    done
+    
+    # check if this job has been sent
+    for filtered_qp in $filtered_qp_array;
+    do
+
+        sent=false
+        # this function will update sent to true if this job has been sent
+        check_job_status $dataset_name $data_name $filtered_qp
+        if [[ $sent = false ]]; then
+            extra_params=${additional_params["$dataset_name"]}
+            echo $extra_params
+                            
+            # OpenImage binfiles have .266 as extension
+            binfile="bin_folder/$dataset_name/QP_$qp/$data_name.vvc"
+            if [[ $dataset_name == "OpenImages" ]]; then
+                binfile="bin_folder/$dataset_name/QP_$qp/$data_name.266"
+            fi
+            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
+            if [[ "$dataset_name" == *"TVD"* ]]; then
+                dataset_name="TVD"
+            fi
+            new_job=-1
+            # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
+            if [ "$#" -eq 6 ]; then
+                # arguments equals to 6 means it is a image job
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params"
+            elif [ "$#" -eq 10 ]; then
+                # arguments equals to 10 means it is a video job
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params"
+                
+            fi
+
+            # sanity check to see if new_job initialized properly
+            if [[ $new_job == -1 ]]; then
+                echo "Job $data_id is not initialized properly, please try again"
+                exit 1
+            else
+                job_array+=($new_job)
+            fi
+        fi
+    
+    done
+}
+
 job_array=()
 for file in ${data_files[@]};
 do 
-    
+    # for each line in the data.txt file, append line to job_array if this line has not been sent for compression
     while read -r line;
     do
         items=($line)
+        data_id=${items[0]}
+        data_name=${items[1]}
+        qp_set=${items[2]}
+        dataset_name=${items[3]}
+        width=${items[4]}
+        height=${items[5]}
 
         if [[ "$file" == *"video"* ]]; then
             echo "File is a video file $file"
-            data_id=${items[0]}
-            data_name=${items[1]}
-            qp_set=${items[2]}
-            intra_period=${items[3]}
-            frame_rate=${items[4]}
-            frame_num=${items[5]}
-            frame_skip=${items[6]}
-            dataset_name=${items[7]}
+            
+            # video data have more parameters than image data
+            intra_period=${items[6]}
+            frame_rate=${items[7]}
+            frame_num=${items[8]}
+            frame_skip=${items[9]}
 
-            check_job_status $data_name "22"
-
-            echo $data_id $data_name $qp_set $intra_period $frame_rate $frame_num $frame_skip $dataset_name
-
-            # ignore jobs which have been sent for compression
+            generate_job $data_id $data_name $qp_set $dataset_name $width $height $intra_period $frame_rate $frame_num $frame_skip
+            
         else
             echo "File is a image file $file"
-            
-            data_id=${items[0]}
-            data_name=${items[1]}
-            qp_set=${items[2]}
-            dataset_name=${items[3]}
 
-            echo $data_id $data_name $qp_set $dataset_name
+            generate_job $data_id $data_name $qp_set $dataset_name $width $height
+
         fi
         
         break
@@ -133,68 +198,70 @@ do
 done
 
 
-##### Functions #####
-1. get_data_type() -> Array(2)
-2. filter_job(mode, type, data_range) -> returns [str]
-3. create_job_array(data_table_subset, qp) -> append str to job_array
-    3.1 read every element within data_table_subset, for each element: 
-    3.2 get_resolution(dataset_name, filename) 
-        3.1.1 Dataset with same resolution throughout -> read from dictionary
-        3.1.2 dataset with resolution on name (e.g. SFU) -> split by "x" and read integer before and after
-        3.1.3 Each file under dataset has different res. , read res using ffprobe  ## need to assume cluster have FFMPEG3
 
+# 5. Distribute each task within job_array to different client pc for compression
+dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
+test_folder=$(realpath ./) # get the absolute path of the shared network test_folder
 
-## task: object, structure: video%name%qp_value%intra_period%frame_rate%frames_num%frame_skip%dataset_dir%additional_param (-dph 1...)
-job_array=() # element; element.name; 
-for datatype in data_types:
-    data_subset_table = filter_job(mode, datatype, data_range=None)
-    job_array.append(create_job_array(data_subset_table, qp))
+function sendTask() {
+    task=$1 # <command>%<bin_location>%<log_name>
+    IFS='%' read -ra task_info <<< "$task" # split the task string with delimiter %
+    command=${task_info[0]} 
+    bin_location=${task_info[1]} 
+    log_name=${task_info[2]} 
+    echo $command
+    echo $bin_location
+    echo $log_name
+    mkdir -p $bin_location # create the bin_dir recursively
+    echo ./encoder ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
 
-echo job_array # contains a list of objects (either video or image objects)
-
-dataset_diretory = "CTC"
-test_folder = "(realpath ./)"
-sendTask(task_object)
-    job_array = ["-i CTC_dataset/FLIR/FLIR0891.yuv -b bin_folder/FLIR/QP_22/FLIR0891.vvc -c -c cfg/encoder_intra_vtm.cfg -fr 1 -f 1--ConformanceWindowMode=1%20bin_folder/dataset_name/QP_22%20FLIR0891.log"]
-    for ele in job_array:
-        ssh $pc $test_folder/RunOne.sh -p $ele
-
-    if task_object.type == "video":
-        log_file=job_obj.split(%20)[2]
-        file_path = os.patj.join(dataset_diretory, task_object.name)
-        parameters = "-i $file_path -qp ${task_object.qp} $additional_parameter"
-        echo "encoder job_obj.split(%20)[0]" >> log_file
-        ssh ... ./RunOne.sh -p "parameters" >> log_file
-
-counter = 0
-while counter < len(job_array) {
-    request_count = 0
-
-    while True:
-        sleep(2)
-
-        for pc in client_pc:
-            available = check_if_available(pc)
-            if available:
-                $avai_pc_ip = $pc
-                break [2]
-        
-        request_count += 1
-
-        if request_count >= 10:
-            break [2]
-
-    sendTask(job_array[counter])
-    counter += 1
-
-    if not exist (start.tim):
-        creeate the file                      
+    ssh $avai_pc_ip cd $test_folder # let the client machine goes to the shared network test_folder
+    ssh $avai_pc_ip RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
 }
 
-if counter == len(job_array):
-    create done.time
-else:
-    raise ("some task is not sent successfully")  # should never get triggered
+counter=0 # the number of jobs sent to the clients
+# echo ${#job_array[@]}
+while [ $counter -lt ${#job_array[@]} ] # main while loop
+do
+    request_count=0
+    while true # busy waiting for the available client pc
+    do
+        sleep 2 # request for available client pc every 2 sec
+        for pc in "${client_pc[@]}"
+        do  
+            pc_info=(${pc//:/ }) # split the pc information
+            pc_name=${pc_info[0]} 
+            pc_ip=${pc_info[1]} 
+            check_if_available $pc_name $pc_ip
+            if [ "$available" = true ] # $available comes from check_if_available()
+            then
+                echo "Assigned to ${pc_name}"
+                avai_pc_ip=$pc_ip
+                break[2] # break current for loop and the busy waiting while loop outside, back to the main while loop
+            fi
+        done
 
+        request_count=$(( $request_count + 1 ))
+        if [ $request_count -ge 10]
+        then
+            break[2] # quit the main while loop if wait for more than 20 sec for the machine
+        fi
+    done
 
+    echo counter is $counter
+    echo ${job_array[counter]} # for debugging: check current task command
 
+    sendTask ${job_array[counter]}
+    if [[ ! -f "start.tim" ]]
+    then
+        touch start.tim
+    fi
+    counter=$(( $counter + 1 )) # move to next task
+done
+
+if [ $counter -eq ${#job_array[@]} ]
+then
+    touch done.tim # all files have been sent to clients for compression
+else
+    echo "Some task is not sent successfully." # should never be triggered
+fi

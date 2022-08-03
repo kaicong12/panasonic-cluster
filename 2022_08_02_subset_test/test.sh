@@ -97,31 +97,6 @@ function check_job_status() {
     fi
 }
 
-function compute_height_width() {
-    
-    dataset_name=$1
-    data_name=$2
-
-    if [[ $dataset_name == "OpenImages" ]]; then
-        # ffprobe command only works on PNG images not YUV
-        # for OpenImages dataset, we would need its PNG in the CTC dataset folder
-        png_path="$dataset_name/$data_name.png"
-        eval $(ffprobe -v error -of flat=s=_ -select_streams v:0 -show_entries stream=width,height $png_path)
-        width=${streams_stream_0_width}
-        height=${streams_stream_0_height}
-
-    elif [[ $dataset_name == "SFU_HW" ]]; then
-        height=
-
-    elif [[ $dataset_name == "FLIR" ]]; then
-        height=512
-        width=640    
-
-    elif [[ $dataset_name == "TVD" ]]; then
-        height=1080
-        width=1920
-}
-
 function generate_job() {
     # this function pushes new jobs which have not been sent into job_array
 
@@ -129,10 +104,12 @@ function generate_job() {
     data_name=$2
     qp_set=$3
     dataset_name=$4
-    intra_period=$5
-    frame_rate=$6
-    frame_num=$7
-    frame_skip=$8
+    width=$5
+    height=$6
+    intra_period=$7
+    frame_rate=$8
+    frame_num=$9
+    frame_skip=$10
 
     # populate qp_array
     qp_array=(${qp_sets[$qp_set]})
@@ -162,12 +139,24 @@ function generate_job() {
             if [[ "$dataset_name" == *"TVD"* ]]; then
                 dataset_name="TVD"
             fi
-            # compute height and width of current data_name
-            height=0
-            width=0
-            compute_height_width $dataset_name $data_name
-            
-            new_job="-i ../CTC_Dataset/$dataset_name/$data_name -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params"
+            new_job=-1
+            # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
+            if [ "$#" -eq 6 ]; then
+                # arguments equals to 6 means it is a image job
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params"
+            elif [ "$#" -eq 10 ]; then
+                # arguments equals to 10 means it is a video job
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params"
+                
+            fi
+
+            # sanity check to see if new_job initialized properly
+            if [[ $new_job == -1 ]]; then
+                echo "Job $data_id is not initialized properly, please try again"
+                exit 1
+            else
+                job_array+=($new_job)
+            fi
         fi
     
     done
@@ -181,29 +170,28 @@ do
     while read -r line;
     do
         items=($line)
+        data_id=${items[0]}
+        data_name=${items[1]}
+        qp_set=${items[2]}
+        dataset_name=${items[3]}
+        width=${items[4]}
+        height=${items[5]}
 
         if [[ "$file" == *"video"* ]]; then
             echo "File is a video file $file"
-            data_id=${items[0]}
-            data_name=${items[1]}
-            qp_set=${items[2]}
-            dataset_name=${items[3]}
-            intra_period=${items[4]}
-            frame_rate=${items[5]}
-            frame_num=${items[6]}
-            frame_skip=${items[7]}
+            
+            # video data have more parameters than image data
+            intra_period=${items[6]}
+            frame_rate=${items[7]}
+            frame_num=${items[8]}
+            frame_skip=${items[9]}
 
-            generate_job $data_id $data_name $qp_set $dataset_name $intra_period $frame_rate $frame_num $frame_skip
+            generate_job $data_id $data_name $qp_set $dataset_name $width $height $intra_period $frame_rate $frame_num $frame_skip
             
         else
             echo "File is a image file $file"
-            
-            data_id=${items[0]}
-            data_name=${items[1]}
-            qp_set=${items[2]}
-            dataset_name=${items[3]}
 
-            generate_job $data_id $data_name $qp_set $dataset_name
+            generate_job $data_id $data_name $qp_set $dataset_name $width $height
 
         fi
         
