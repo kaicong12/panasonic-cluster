@@ -20,33 +20,42 @@ image_data = prettytable.PrettyTable()
 
 image_data.border = False
 
-image_data.field_names = ["data_id", "name", "qp_set", "dataset_name"]
+image_data.field_names = ["data_id", "name", "qp_set", "dataset_name", "width", "height"]
 
 image_data.align = "l"
 
-with open('flir.csv') as csv_file:
+with open('flir_wdt_hgt.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter='\n')
     for row in csv_reader:
-        name = row[0]
+        row = row[0]
+        name = row.split(' ')[0]
         print(name)
-        image_data.add_row([id, name, qp_sets["FLIR"], "FLIR"])
+        width = row.split(' ')[1]
+        height = row.split(' ')[2]
+        image_data.add_row([id, name, qp_sets["FLIR"], "FLIR", width, height])
         id += 1
 
 
-with open('openImage.csv') as csv_file:
+with open('openImage_wdt_hgt.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter='\n')
     for row in csv_reader:
-        name = row[0].split("/")[1]
+        row = row[0]
+        name = row.split(' ')[0]
         print(name)
-        image_data.add_row([id, name, qp_sets["OpenImages"], "OpenImages"])
+        width = row.split(' ')[1]
+        height = row.split(' ')[2]
+        image_data.add_row([id, name, qp_sets["OpenImages"], "OpenImages", width, height])
         id += 1
 
-with open('tvd_image.csv') as csv_file:
+with open('tvd_image_wdt_hgt.csv') as csv_file:
     csv_reader = csv.reader(csv_file, delimiter='\n')
     for row in csv_reader:
-        name = row[0]
+        row = row[0]
+        name = row.split(' ')[0]
         print(name)
-        image_data.add_row([id, name, qp_sets["TVD_image"], "TVD_image"])
+        width = row.split(' ')[1]
+        height = row.split(' ')[2]
+        image_data.add_row([id, name, qp_sets["TVD_image"], "TVD_image", width, height])
         id += 1
 
 image_data.align = "l"
@@ -57,7 +66,7 @@ video_data = prettytable.PrettyTable()
 
 video_data.border = False
 
-video_data.field_names = ["data_id", "name", "qp_set", "dataset_name", "intra_period", "frame_rate", "frames_num", "frame_skip"]
+video_data.field_names = ["data_id", "name", "qp_set", "dataset_name", "width", "height", "intra_period", "frame_rate", "frames_num", "frame_skip"]
 
 TVD_video_names = ["TVD-01", "TVD-02", "TVD-03"]
 SFU_video_names = ["Traffic_2560x1600_30_crop", "Kimono1_1920x1080_24", "ParkScene_1920x1080_24", "Cactus_1920x1080_50", "BasketballDrive_1920x1080_50", "BQTerrace_1920x1080_60", "BasketballDrill_832x480_50", "BQMall_832x480_60", "PartyScene_832x480_50", "RaceHorses_832x480_30", "BasketballPass_416x240_50", "BQSquare_416x240_60", "BlowingBubbles_416x240_50", "RaceHorses_416x240_30", "FourPeople_1280x720_60", "Johnny_1280x720_60", "KristenAndSara_1280x720_60"]
@@ -89,12 +98,14 @@ sfu_dict = { # (IntraPeriod, FrameRate, FramesToBeEncoded, FrameSkip, QP_set)
 }
 
 for name in TVD_video_names:
-    video_data.add_row([id, name, qp_sets[name], "TVD_video", tvd_dict[name][0], tvd_dict[name][1], tvd_dict[name][2], tvd_dict[name][3]])
+    video_data.add_row([id, name, qp_sets[name], "TVD_video", "1920", "1080", tvd_dict[name][0], tvd_dict[name][1], tvd_dict[name][2], tvd_dict[name][3]])
     id += 1
 
 
 for name in SFU_video_names:
-    video_data.add_row([id, name, qp_sets[sfu_dict[name][4]], "SFU_HW", sfu_dict[name][0], sfu_dict[name][1], sfu_dict[name][2], sfu_dict[name][3]])
+    width = name.split("_")[1].split("x")[0]
+    height = name.split("_")[1].split("x")[1]
+    video_data.add_row([id, name, qp_sets[sfu_dict[name][4]], "SFU_HW", width, height, sfu_dict[name][0], sfu_dict[name][1], sfu_dict[name][2], sfu_dict[name][3]])
     id += 1
 video_data.align = "l"
 # print(type(image_data))
