@@ -57,7 +57,7 @@ video_data = prettytable.PrettyTable()
 
 video_data.border = False
 
-video_data.field_names = ["data_id", "name", "qp_set", "intra_period", "frame_rate", "frames_num", "frame_skip", "dataset_name"]
+video_data.field_names = ["data_id", "name", "qp_set", "dataset_name", "intra_period", "frame_rate", "frames_num", "frame_skip"]
 
 TVD_video_names = ["TVD-01", "TVD-02", "TVD-03"]
 SFU_video_names = ["Traffic_2560x1600_30_crop", "Kimono1_1920x1080_24", "ParkScene_1920x1080_24", "Cactus_1920x1080_50", "BasketballDrive_1920x1080_50", "BQTerrace_1920x1080_60", "BasketballDrill_832x480_50", "BQMall_832x480_60", "PartyScene_832x480_50", "RaceHorses_832x480_30", "BasketballPass_416x240_50", "BQSquare_416x240_60", "BlowingBubbles_416x240_50", "RaceHorses_416x240_30", "FourPeople_1280x720_60", "Johnny_1280x720_60", "KristenAndSara_1280x720_60"]
@@ -89,12 +89,12 @@ sfu_dict = { # (IntraPeriod, FrameRate, FramesToBeEncoded, FrameSkip, QP_set)
 }
 
 for name in TVD_video_names:
-    video_data.add_row([id, name, qp_sets[name], tvd_dict[name][0], tvd_dict[name][1], tvd_dict[name][2], tvd_dict[name][3], "TVD_video"])
+    video_data.add_row([id, name, qp_sets[name], "TVD_video", tvd_dict[name][0], tvd_dict[name][1], tvd_dict[name][2], tvd_dict[name][3]])
     id += 1
 
 
 for name in SFU_video_names:
-    video_data.add_row([id, name, qp_sets[sfu_dict[name][4]], sfu_dict[name][0], sfu_dict[name][1], sfu_dict[name][2], sfu_dict[name][3], "SFU_HW"])
+    video_data.add_row([id, name, qp_sets[sfu_dict[name][4]], "SFU_HW", sfu_dict[name][0], sfu_dict[name][1], sfu_dict[name][2], sfu_dict[name][3]])
     id += 1
 video_data.align = "l"
 # print(type(image_data))
