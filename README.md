@@ -26,7 +26,7 @@ Files/Folders to be copied over are:
 *Note that **`bin_folder`** stores both the compressed binfile and encoder log which signifies that the data has been sent. The binfiles and encoder logfiles are categorized by dataset name and QP.  
 <br>
 
-## Cluster Distribution Logic
+## Cluster Script Logic
 1. Read user input
     - **`mode`**: either "full" or "subset"
     - **`data_range`**: a list of integers indicating which subset of data_id to run compression on if `mode` selected is `subset`
@@ -39,7 +39,7 @@ Files/Folders to be copied over are:
 4. Distribute each task within job_array to different client pc for compression
     
 ### Generate Job Array
-The create job array function consists of 2 parts, first is to read through either the `filtered_image_data.txt` and `filtered_video_data.txt` or the `image_data.txt` and `video_data.txt` depending on the mode for the test.
+The create job array function consists of 2 parts, first is to read through either the `filtered_image_data.txt` and `filtered_video_data.txt` or the `image_data.txt` and `video_data.txt` depending on the mode for the test. If user chooses to run the test on `subset` mode, the script would read through `filtered_image_data.txt` and `filtered_video_data.txt`. Otherwise if user chooses to run the test on `full` mode, the script would read through `image_data.txt` and `video_data.txt` instead.
 
 Code to read through each line are as below:
 <details>
@@ -162,7 +162,6 @@ function generate_job() {
 ```
 
 </details>
-<br>
 
 ## Task distribution logic
 Follow same task distribution logic as the old perl script. Iterate through each job within the job_array and check for available pc to send the job to, if no available pc is found after 20 seconds, break out from this current test and move on to the next test.
