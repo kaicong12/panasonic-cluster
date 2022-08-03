@@ -2,8 +2,8 @@
 
 # 1. Create all necessary information to parse user input
 # 2. Parse user input
-# 3. Iterate through each row in the data table
-# 4. Generate job_array
+# 3. Iterate through each row in the data table if user selected subset mode
+# 4. Generate job_array from either data.txt or filtered_data.txt
 # 5. Distribute each task within job_array to different client pc for compression
 
 
@@ -80,7 +80,7 @@ fi
 
 
 
-# 4. Generate job_array
+# 4. Generate job_array from either data.txt or filtered_data.txt
 function check_job_status() {
     # this function determines if the job within the data_table has been sent
 
@@ -109,7 +109,7 @@ function generate_job() {
     frame_num=$9
     frame_skip=$10
 
-    # populate qp_array
+    # populate qp_array according to index specified by user (each task may use different qp_set)
     qp_array=(${qp_sets[$qp_set]})
     filtered_qp_array=()
     for index in ${QP[@]};
@@ -126,12 +126,12 @@ function generate_job() {
         check_job_status $dataset_name $data_name $filtered_qp
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
-            echo $extra_params
                             
             # OpenImage binfiles have .266 as extension
-            binfile="bin_folder/$dataset_name/QP_$qp/$data_name.vvc"
+            binfolder="bin_folder/$dataset_name/QP_$qp"
+            binfile="$binfolder/$data_name.vvc"
             if [[ $dataset_name == "OpenImages" ]]; then
-                binfile="bin_folder/$dataset_name/QP_$qp/$data_name.266"
+                binfile="$binfolder/$data_name.266"
             fi
             # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
             if [[ "$dataset_name" == *"TVD"* ]]; then
@@ -141,14 +141,13 @@ function generate_job() {
             # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
             if [ "$#" -eq 6 ]; then
                 # arguments equals to 6 means it is a image job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params"
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
             elif [ "$#" -eq 10 ]; then
                 # arguments equals to 10 means it is a video job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params"
-                
+                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
             fi
 
-            # sanity check to see if new_job initialized properly
+            # sanity check to see if new_job is initialized properly
             if [[ $new_job == -1 ]]; then
                 echo "Job $data_id is not initialized properly, please try again"
                 exit 1
@@ -161,11 +160,18 @@ function generate_job() {
 }
 
 job_array=()
+# determine if cluster should create job_array based on full data.txt or filtered_data.txt depending on mode
+if [[ $mode == "subset" ]]; then
+    data_files=$(ls | grep "filtered*")
+else
+    data_files=("image_data.txt" "video_data.txt")
+fi
 for file in ${data_files[@]};
 do 
-    # for each line in the data.txt file, append line to job_array if this line has not been sent for compression
+    # for each line in the data.txt or filtered_data.txt file, append line to job_array if this line has not been sent for compression
     while read -r line;
     do
+
         items=($line)
         data_id=${items[0]}
         data_name=${items[1]}
@@ -183,17 +189,17 @@ do
             frame_num=${items[8]}
             frame_skip=${items[9]}
 
+            # check if this job has been sent and send if it hasnt
             generate_job $data_id $data_name $qp_set $dataset_name $width $height $intra_period $frame_rate $frame_num $frame_skip
             
         else
             echo "File is a image file $file"
 
+            # check if this job has been sent and send if it hasnt
             generate_job $data_id $data_name $qp_set $dataset_name $width $height
 
         fi
         
-        break
-
     done < $file
 done
 
