@@ -21,5 +21,3 @@ while getopts "p:" OPTION; do
   esac
 done
 shift "$(($OPTIND-1))"
-
-
