@@ -1,4 +1,2 @@
-sample_test1
-sample_test2
 2022_07_25_VTM12.0_Full_VCM_postfilter
 2022_08_01_VTM11.0_Sub_VVC_random

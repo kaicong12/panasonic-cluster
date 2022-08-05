@@ -2,7 +2,7 @@
 
 # RunEnc.sh
 ## Directories Definition
-All files needed to run a specific test are to be manually copied over by user as user creates the new test_folder (in this case `2022_08_02_subset_test`)  and place directly under the new test folder
+All files needed to run a specific test are to be manually copied over by user as user creates the new test_folder (in this case `2022_08_01_VTM11.0_Sub_VVC_random`)  and place directly under the new test folder
 
 Files/Folders to be copied over are:  
 - `cfg_folder`
@@ -12,7 +12,7 @@ Files/Folders to be copied over are:
 - `RunEnc.sh`
 - `RunOne.sh`  
 ```
-    ├── 2022_08_02_subset_test  -> test name for a specific test
+    ├── 2022_08_01_VTM11.0_Sub_VVC_random  -> test name for a specific test
     │   ├── image_data.txt
     │   ├── video_data.txt
     │   ├── check_cpu.sh
@@ -88,7 +88,7 @@ done
 </details>
 
 The second part of generating job_array is to actually generate the job array using the data table produced from the previous step. For each job, the script would generate one task for every qp to compress the same data on. One examplary task would be as follow:  
-`"-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"`  
+`"-i $yuvfolder/$data_name.yuv -b $binfile -q $qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"`  
 Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#RunOne.sh) section)
 
 Code to generate job_array are as below:
@@ -120,7 +120,7 @@ function generate_job() {
     done
     
     # check if this job has been sent
-    for filtered_qp in $filtered_qp_array;
+    for filtered_qp in ${filtered_qp_array[@]};
     do
 
         sent=false
@@ -129,24 +129,27 @@ function generate_job() {
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
                             
+            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
+            if [[ "$dataset_name" == *"TVD"* ]]; then
+                binfolder="bin_folder/TVD/QP_$qp"
+                yuvfolder="../CTC_Dataset/TVD"
+            else
+                binfolder="bin_folder/$dataset_name/QP_$qp"
+                yuvfolder="../CTC_Dataset/$dataset_name"
+            fi
             # OpenImage binfiles have .266 as extension
-            binfolder="bin_folder/$dataset_name/QP_$qp"
             binfile="$binfolder/$data_name.vvc"
             if [[ $dataset_name == "OpenImages" ]]; then
                 binfile="$binfolder/$data_name.266"
-            fi
-            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
-            if [[ "$dataset_name" == *"TVD"* ]]; then
-                dataset_name="TVD"
             fi
             new_job=-1
             # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
             if [ "$#" -eq 6 ]; then
                 # arguments equals to 6 means it is a image job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
             elif [ "$#" -eq 10 ]; then
                 # arguments equals to 10 means it is a video job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
             fi
 
             # sanity check to see if new_job is initialized properly
@@ -154,7 +157,7 @@ function generate_job() {
                 echo "Job $data_id is not initialized properly, please try again"
                 exit 1
             else
-                job_array+=($new_job)
+                job_array+=("$new_job")
             fi
         fi
     
@@ -163,6 +166,7 @@ function generate_job() {
 ```
 
 </details>
+<br>
 
 ## Task distribution logic
 Follow same task distribution logic as the old perl script. Iterate through each job within the job_array and check for available pc to send the job to, if no available pc is found after 20 seconds, break out from this current test and move on to the next test.
@@ -216,6 +220,7 @@ else
 fi
 ```
 </details>
+<br>
 
 
 # RunOne.sh
@@ -229,10 +234,8 @@ Code for RunOne.sh are as below:
 while getopts "p:" OPTION; do
   case "$OPTION" in
     p)
-      avalue="$OPTARG"
-      # echo "The command provided is $OPTARG"
       chmod u+x encoder
-      ./encoder $OPTARG
+      ./encoder "$OPTARG"
       ;;
   esac
 done
@@ -244,4 +247,41 @@ shift "$(($OPTIND-1))"
 
 
 # VCM Inference Scripts
+## Directories Definition
+Prior to the inferencing step, user is expected to copy the `vcm_Inference` folder into each of the client PC. There are a total of **7 task folders** and **2 shelll scripts** under the `vcm_Inference` folder. Each folder contains the fully compressed dataset of the intended QP, and user is expected to use the `auto_inference.sh` script to perform model inference on a specific dataset and QP.
+<br>
 
+Examples:  
+To perform inference with flir on QP_22, QP_27 and QP_32, run from **client PC**:                
+```./auto_inference.sh flir ./eval_coco_mAP.sh None None "22 27 32"```
+
+To perform inference with openimages_det on all QPs with **`CUDA_DEVICE=1`**, run from **client PC**:                
+```./auto_inference.sh  openimages_det ./scripts/anchor.cfg 1 None```
+
+To perform inference with tvd_tracking on all QPs with **`CUDA_DEVICE=2`**, run from **client PC**:                
+```./auto_inference.sh  tvd_tracking ./scripts/anchor_track.cfg 2 None```
+
+```
+vcm_Inference
+    ├── auto_inference.sh
+    ├── gpu.sh
+    ├── flir
+    ├── openimages_det
+    ├── openimages_seg
+    ├── sfu_hw
+    ├── tvd_det
+    ├── tvd_seg
+    └── tvd_tracking
+```
+
+In addition to the fully compressed dataset, each task folder would also contain the following scripts. The scripts listed below would be triggered by `auto_inference.sh` during the inferencing process for each individual task. 
+
+| Task Name       | `run_inference.sh` | `set_device.sh` | `set_qp.sh` | `set_group.sh` |
+| :----------:    | :----------------: | :-------------: | :---------: | :------------: | 
+| flir            |                    |                 | &check;     |                |
+| openimages_det  |                    | &check;         | &check;     |                |
+| openimages_seg  | &check;            | &check;         | &check;     |                |
+| sfu_hw          | &check;            | &check;         | &check;     |                |
+| tvd_det         | &check;            | &check;         | &check;     |                |
+| tvd_seg         | &check;            | &check;         | &check;     |                |
+| tvd_tracking    | &check;            | &check;         | &check;     |                |

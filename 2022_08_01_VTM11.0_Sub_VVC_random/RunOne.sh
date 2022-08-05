@@ -13,10 +13,8 @@ fi
 while getopts "p:" OPTION; do
   case "$OPTION" in
     p)
-      avalue="$OPTARG"
-      # echo "The command provided is $OPTARG"
       chmod u+x encoder
-      ./encoder $OPTARG
+      ./encoder "$OPTARG"
       ;;
   esac
 done

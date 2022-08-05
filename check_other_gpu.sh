@@ -12,7 +12,7 @@ ip_address=(
 
 ##### Remove tasks and respective config files from this array and the one below to skip certain inference tasks #####
 dataset_tasks=(
-    "FLIR_det"
+    "FLIR"
     "OpenImages_det"
     "OpenImages_seg"
     "SFU-HW_det"
