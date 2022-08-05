@@ -1,5 +1,8 @@
 #!/bin/bash
 
+pc_name=$1
+pc_ip=$2
+
 command="sar 1 1 | grep Average"
 average=$(eval $command)
 echo $average

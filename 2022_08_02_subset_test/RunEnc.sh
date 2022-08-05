@@ -26,11 +26,17 @@ additional_params=(
     ["TVD_image"]="-c cfg/encoder_intra_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10"
 )
 
+client_pc=(
+    "user@192.168.1.17"
+)
+
 
 
 # 2. Parse user input
-mode="full"
-data_range=()
+# mode="full"
+# data_range=()
+mode="subset"
+data_range=$(seq 8650 8660)
 QP=(0 1 2 3 4 5)
 
 # user input validation
@@ -93,7 +99,9 @@ function check_job_status() {
         echo "$encoder_log exists."
         sent=true
     fi
+
 }
+
 
 function generate_job() {
     # this function pushes new jobs which have not been sent into job_array
@@ -118,7 +126,7 @@ function generate_job() {
     done
     
     # check if this job has been sent
-    for filtered_qp in $filtered_qp_array;
+    for filtered_qp in ${filtered_qp_array[@]};
     do
 
         sent=false
@@ -127,24 +135,27 @@ function generate_job() {
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
                             
+            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
+            if [[ "$dataset_name" == *"TVD"* ]]; then
+                binfolder="bin_folder/TVD/QP_$qp"
+                yuvfolder="../CTC_Dataset/TVD"
+            else
+                binfolder="bin_folder/$dataset_name/QP_$qp"
+                yuvfolder="../CTC_Dataset/$dataset_name"
+            fi
             # OpenImage binfiles have .266 as extension
-            binfolder="bin_folder/$dataset_name/QP_$qp"
             binfile="$binfolder/$data_name.vvc"
             if [[ $dataset_name == "OpenImages" ]]; then
                 binfile="$binfolder/$data_name.266"
-            fi
-            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
-            if [[ "$dataset_name" == *"TVD"* ]]; then
-                dataset_name="TVD"
             fi
             new_job=-1
             # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
             if [ "$#" -eq 6 ]; then
                 # arguments equals to 6 means it is a image job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
             elif [ "$#" -eq 10 ]; then
                 # arguments equals to 10 means it is a video job
-                new_job="-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
             fi
 
             # sanity check to see if new_job is initialized properly
@@ -152,7 +163,7 @@ function generate_job() {
                 echo "Job $data_id is not initialized properly, please try again"
                 exit 1
             else
-                job_array+=($new_job)
+                job_array+=("$new_job")
             fi
         fi
     
@@ -180,9 +191,7 @@ do
         width=${items[4]}
         height=${items[5]}
 
-        if [[ "$file" == *"video"* ]]; then
-            echo "File is a video file $file"
-            
+        if [[ "$file" == *"video"* ]]; then            
             # video data have more parameters than image data
             intra_period=${items[6]}
             frame_rate=${items[7]}
@@ -193,8 +202,6 @@ do
             generate_job $data_id $data_name $qp_set $dataset_name $width $height $intra_period $frame_rate $frame_num $frame_skip
             
         else
-            echo "File is a image file $file"
-
             # check if this job has been sent and send if it hasnt
             generate_job $data_id $data_name $qp_set $dataset_name $width $height
 
@@ -203,6 +210,7 @@ do
     done < $file
 done
 
+echo "####### Generated ${#job_array[@]} jobs to be sent to client PC #######"
 
 
 # 5. Distribute each task within job_array to different client pc for compression
@@ -210,23 +218,20 @@ dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
 test_folder=$(realpath ./) # get the absolute path of the shared network test_folder
 
 function sendTask() {
-    task=$1 # <command>%<bin_location>%<log_name>
+    task=$1
+
     IFS='%' read -ra task_info <<< "$task" # split the task string with delimiter %
     command=${task_info[0]} 
     bin_location=${task_info[1]} 
     log_name=${task_info[2]} 
-    echo $command
-    echo $bin_location
-    echo $log_name
+
     mkdir -p $bin_location # create the bin_dir recursively
     echo ./encoder ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
 
-    ssh $avai_pc_ip cd $test_folder # let the client machine goes to the shared network test_folder
-    ssh $avai_pc_ip RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
+    ssh $avai_pc_ip cd $test_folder && RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
 }
 
 counter=0 # the number of jobs sent to the clients
-# echo ${#job_array[@]}
 while [ $counter -lt ${#job_array[@]} ] # main while loop
 do
     request_count=0
@@ -238,24 +243,21 @@ do
             pc_info=(${pc//:/ }) # split the pc information
             pc_name=${pc_info[0]} 
             pc_ip=${pc_info[1]} 
-            check_if_available $pc_name $pc_ip
+            ./check_cpu.sh $pc_name $pc_ip
             if [ "$available" = true ] # $available comes from check_if_available()
             then
                 echo "Assigned to ${pc_name}"
                 avai_pc_ip=$pc_ip
-                break[2] # break current for loop and the busy waiting while loop outside, back to the main while loop
+                break 2 # break current for loop and the busy waiting while loop outside, back to the main while loop
             fi
         done
 
         request_count=$(( $request_count + 1 ))
-        if [ $request_count -ge 10]
+        if [ $request_count -ge 10 ]
         then
-            break[2] # quit the main while loop if wait for more than 20 sec for the machine
+            break 2 # quit the main while loop if wait for more than 20 sec for the machine
         fi
     done
-
-    echo counter is $counter
-    echo ${job_array[counter]} # for debugging: check current task command
 
     sendTask ${job_array[counter]}
     if [[ ! -f "start.tim" ]]

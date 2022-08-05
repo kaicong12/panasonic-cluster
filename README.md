@@ -1,10 +1,12 @@
 # VCM AutoEnvironment Cluster Script 
 
+# RunEnc.sh
 ## Directories Definition
 All files needed to run a specific test are to be manually copied over by user as user creates the new test_folder (in this case `2022_08_02_subset_test`)  and place directly under the new test folder
 
 Files/Folders to be copied over are:  
 - `cfg_folder`
+- `check_cpu.sh`
 - `image_data.txt`
 - `video_data.txt`
 - `RunEnc.sh`
@@ -13,6 +15,7 @@ Files/Folders to be copied over are:
     ├── 2022_08_02_subset_test  -> test name for a specific test
     │   ├── image_data.txt
     │   ├── video_data.txt
+    │   ├── check_cpu.sh
     │   ├── RunEnc.sh
     │   ├── RunOne.sh
     │   ├── cfg_folder
@@ -21,7 +24,7 @@ Files/Folders to be copied over are:
     │   └── bin_folder  -> will be created by the script
     │       └── TVD
     │           └── QP_22
-```
+``` 
 
 *Note that **`bin_folder`** stores both the compressed binfile and encoder log which signifies that the data has been sent. The binfiles and encoder logfiles are categorized by dataset name and QP.  
 <br>
@@ -39,7 +42,9 @@ Files/Folders to be copied over are:
 4. Distribute each task within job_array to different client pc for compression
     
 ### Generate Job Array
-The create job array function consists of 2 parts, first is to read through either the `filtered_image_data.txt` and `filtered_video_data.txt` or the `image_data.txt` and `video_data.txt` depending on the mode for the test. If user chooses to run the test on `subset` mode, the script would read through `filtered_image_data.txt` and `filtered_video_data.txt`. Otherwise if user chooses to run the test on `full` mode, the script would read through `image_data.txt` and `video_data.txt` instead.
+The create job array function consists of 2 parts, first is to read through either the `filtered_image_data.txt` and `filtered_video_data.txt` or the `image_data.txt` and `video_data.txt` depending on the mode for the test. 
+- If user chooses to run the test on `subset` mode, the script would read through `filtered_image_data.txt` and `filtered_video_data.txt`. 
+- Otherwise if user chooses to run the test on `full` mode, the script would read through `image_data.txt` and `video_data.txt` instead.
 
 Code to read through each line are as below:
 <details>
@@ -60,9 +65,7 @@ do
         width=${items[4]}
         height=${items[5]}
 
-        if [[ "$file" == *"video"* ]]; then
-            echo "File is a video file $file"
-            
+        if [[ "$file" == *"video"* ]]; then            
             # video data have more parameters than image data
             intra_period=${items[6]}
             frame_rate=${items[7]}
@@ -73,8 +76,6 @@ do
             generate_job $data_id $data_name $qp_set $dataset_name $width $height $intra_period $frame_rate $frame_num $frame_skip
             
         else
-            echo "File is a image file $file"
-
             # check if this job has been sent and send if it hasnt
             generate_job $data_id $data_name $qp_set $dataset_name $width $height
 
@@ -88,7 +89,7 @@ done
 
 The second part of generating job_array is to actually generate the job array using the data table produced from the previous step. For each job, the script would generate one task for every qp to compress the same data on. One examplary task would be as follow:  
 `"-i ../CTC_Dataset/$dataset_name/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"`  
-Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding.
+Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#RunOne.sh) section)
 
 Code to generate job_array are as below:
 <details>
@@ -172,7 +173,6 @@ Code to send task are as below:
 
 ```shell
 counter=0 # the number of jobs sent to the clients
-# echo ${#job_array[@]}
 while [ $counter -lt ${#job_array[@]} ] # main while loop
 do
     request_count=0
@@ -189,19 +189,16 @@ do
             then
                 echo "Assigned to ${pc_name}"
                 avai_pc_ip=$pc_ip
-                break[2] # break current for loop and the busy waiting while loop outside, back to the main while loop
+                break 2 # break current for loop and the busy waiting while loop outside, back to the main while loop
             fi
         done
 
         request_count=$(( $request_count + 1 ))
         if [ $request_count -ge 10]
         then
-            break[2] # quit the main while loop if wait for more than 20 sec for the machine
+            break 2 # quit the main while loop if wait for more than 20 sec for the machine
         fi
     done
-
-    echo counter is $counter
-    echo ${job_array[counter]} # for debugging: check current task command
 
     sendTask ${job_array[counter]}
     if [[ ! -f "start.tim" ]]
@@ -210,5 +207,36 @@ do
     fi
     counter=$(( $counter + 1 )) # move to next task
 done
+
+if [ $counter -eq ${#job_array[@]} ]
+then
+    touch done.tim # all files have been sent to clients for compression
+else
+    echo "Some task is not sent successfully." # should never be triggered
+fi
 ```
+</details>
+
+
+# RunOne.sh
+This script takes in each task within the job array as input argument and parse the input argument as parameters to encode the given task.
+
+Code for RunOne.sh are as below:
+<details>
+  <summary><b>Click to view RunOne.sh</b></summary>
+
+```shell
+while getopts "p:" OPTION; do
+  case "$OPTION" in
+    p)
+      avalue="$OPTARG"
+      # echo "The command provided is $OPTARG"
+      chmod u+x encoder
+      ./encoder $OPTARG
+      ;;
+  esac
+done
+shift "$(($OPTIND-1))"
+```
+
 </details>
