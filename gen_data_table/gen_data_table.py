@@ -29,7 +29,6 @@ with open('flir_wdt_hgt.csv') as csv_file:
     for row in csv_reader:
         row = row[0]
         name = row.split(' ')[0]
-        print(name)
         width = row.split(' ')[1]
         height = row.split(' ')[2]
         image_data.add_row([id, name, qp_sets["FLIR"], "FLIR", width, height])
@@ -41,7 +40,6 @@ with open('openImage_wdt_hgt.csv') as csv_file:
     for row in csv_reader:
         row = row[0]
         name = row.split(' ')[0]
-        print(name)
         width = row.split(' ')[1]
         height = row.split(' ')[2]
         image_data.add_row([id, name, qp_sets["OpenImages"], "OpenImages", width, height])
@@ -52,7 +50,6 @@ with open('tvd_image_wdt_hgt.csv') as csv_file:
     for row in csv_reader:
         row = row[0]
         name = row.split(' ')[0]
-        print(name)
         width = row.split(' ')[1]
         height = row.split(' ')[2]
         image_data.add_row([id, name, qp_sets["TVD_image"], "TVD_image", width, height])

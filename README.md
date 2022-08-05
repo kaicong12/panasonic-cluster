@@ -1,4 +1,4 @@
-# VCM AutoEnvironment Cluster Script 
+# VVC AutoEnvironment Cluster Script 
 
 # RunEnc.sh
 ## Directories Definition
@@ -240,3 +240,8 @@ shift "$(($OPTIND-1))"
 ```
 
 </details>
+<br>
+
+
+# VCM Inference Scripts
+
