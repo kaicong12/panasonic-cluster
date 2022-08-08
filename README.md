@@ -24,6 +24,8 @@ Files/Folders to be copied over are:
     ├── 2022_08_01_VTM11.0_Sub_VVC_random  -> test name for a specific test
     │   ├── image_data.txt
     │   ├── video_data.txt
+    │   ├── filtered_image_data.txt  -> will be created by the script if user chooses "subset" mode
+    │   ├── filtered_video_data.txt  -> will be created by the script if user chooses "subset" mode
     │   ├── check_cpu.sh
     │   ├── RunEnc.sh
     │   ├── RunOne.sh
