@@ -3,9 +3,9 @@
 # How to run a custom test
 1. Decide on a custom name for the new custom test. (e.g. `2022_08_01_VTM11.0_Sub_VVC_random`)
 2. Create a new folder under directly at the root using the custom name.
-3. Copy the necessary files/folder into the new folder, files to be copied are listed at the [Directories Definition](##-Directories-Definition) section.
+3. Copy the necessary files/folder into the new folder, files to be copied are listed at the [Directories Definition](##Directories-Definition) section.
 4. Open up `job_list.txt` and key in the name of this new test, tests in `job_list.txt` will be executed from top to bottom, so user may place the test with a higher priority on top
-5. Go to `RunEnc.sh` within the test folder to key in the specific inputs for this new test, available user inputs are `QPs`, `data_range` and `mode`, the explanation for each input is specified under the [Cluster Script Logic](##-Cluster-Script-Logic) section.
+5. Go to `RunEnc.sh` within the test folder to key in the specific inputs for this new test, available user inputs are `QPs`, `data_range` and `mode`, the explanation for each input is specified under the [Cluster Script Logic](##Cluster-Script-Logic) section.
 6. Execute `./job_list.sh` from the terminal, give it executable permission if required `chmod u+x ./job_list.sh`
 
 
@@ -98,7 +98,7 @@ done
 
 The second part of generating job_array is to actually generate the job array using the data table produced from the previous step. For each job, the script would generate one task for every qp to compress the same data on. One examplary task would be as follow:  
 `"-i $yuvfolder/$data_name.yuv -b $binfile -q $qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"`  
-Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#-RunOne.sh) section)
+Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#RunOne.sh) section)
 
 Code to generate job_array are as below:
 <details>
