@@ -1,5 +1,14 @@
 # VVC AutoEnvironment Cluster Script 
 
+# How to run a custom test
+1. Decide on a custom name for the new custom test. (e.g. `2022_08_01_VTM11.0_Sub_VVC_random`)
+2. Create a new folder under directly at the root using the custom name.
+3. Copy the necessary files/folder into the new folder, files to be copied are listed at the [Directories Definition](##-Directories-Definition) section.
+4. Open up `job_list.txt` and key in the name of this new test, tests in `job_list.txt` will be executed from top to bottom, so user may place the test with a higher priority on top
+5. Go to `RunEnc.sh` within the test folder to key in the specific inputs for this new test, available user inputs are `QPs`, `data_range` and `mode`, the explanation for each input is specified under the [Cluster Script Logic](##-Cluster-Script-Logic) section.
+6. Execute `./job_list.sh` from the terminal, give it executable permission if required `chmod u+x ./job_list.sh`
+
+
 # RunEnc.sh
 ## Directories Definition
 All files needed to run a specific test are to be manually copied over by user as user creates the new test_folder (in this case `2022_08_01_VTM11.0_Sub_VVC_random`)  and place directly under the new test folder
@@ -89,7 +98,7 @@ done
 
 The second part of generating job_array is to actually generate the job array using the data table produced from the previous step. For each job, the script would generate one task for every qp to compress the same data on. One examplary task would be as follow:  
 `"-i $yuvfolder/$data_name.yuv -b $binfile -q $qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"`  
-Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#RunOne.sh) section)
+Each task represents a command to be run by the Encoder on a specific QP and this task will be sent to `RunOne.sh` for encoding. (Details specified under the [RunOne.sh](#-RunOne.sh) section)
 
 Code to generate job_array are as below:
 <details>
@@ -285,3 +294,36 @@ In addition to the fully compressed dataset, each task folder would also contain
 | tvd_det         | &check;            | &check;         | &check;     |                |
 | tvd_seg         | &check;            | &check;         | &check;     |                |
 | tvd_tracking    | &check;            | &check;         | &check;     |                |
+
+Code for auto_inference.sh are as below:
+<details>
+  <summary><b>Click to view auto_inference.sh</b></summary>
+
+```shell
+# acceptable task values are "flir", "openimages_det", "openimages_seg", "sfu_hw", "tvd_det", "tvd_seg", "tvd_tracking"
+task=$1
+cfg_location=$2
+device_idx=$3
+group=$4
+qp_list="$5"
+
+# go into the specific task folder
+cd $task
+
+# set device
+# set group (only works for sfu_hw_det)
+chmod u+x set_device.sh
+chmod u+x set_group.sh
+chmod u+x set_qp.sh
+
+./set_device.sh $cfg_location $device_idx
+./set_group.sh $cfg_location $group
+./set_qp.sh $cfg_location "$qp_list"
+
+# build and run the docker file
+docker build -t $task .
+docker run --gpus all --rm -v $PWD:/${task} ${task}
+```
+
+</details>
+<br>
