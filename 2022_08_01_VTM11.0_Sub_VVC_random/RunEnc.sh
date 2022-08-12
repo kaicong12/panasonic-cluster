@@ -19,11 +19,11 @@ qp_sets=(
 
 declare -A additional_params
 additional_params=(
-    ["FLIR"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1--ConformanceWindowMode=1"
+    ["FLIR"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1"
     ["OpenImages"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1"
     ["SFU_HW"]="-c cfg/encoder_randomaccess_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10"
     ["TVD_video"]="-c cfg/encoder_randomaccess_vtm.cfg --InputBitDepth=8 --ReconFile=/dev/null --PrintHexPSNR -v 6 --ConformanceWindowMode=1"  # took out -dph 1
-    ["TVD_image"]="-c cfg/encoder_intra_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10"
+    ["TVD_image"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1 --InternalBitDepth=10"
 )
 
 client_pc=(
@@ -37,7 +37,7 @@ client_pc=(
 # mode="full"
 # data_range=()
 mode="subset"
-data_range=$(seq 8650 8660)
+data_range=$(seq 8480 8495)
 QP=(0 1 2 3 4 5)
 
 # user input validation
@@ -136,7 +136,7 @@ function generate_job() {
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
             binfolder="bin_folder/$dataset_name/QP_$qp"
-            yuvfolder="../CTC_Dataset/$dataset_name"
+            yuvfolder="../CTC_YUV_Dataset/$dataset_name"
 
             # OpenImage binfiles have .266 as extension
             binfile="$binfolder/$data_name.vvc"
@@ -223,7 +223,9 @@ function sendTask() {
     mkdir -p $bin_location
     echo ./EncoderApp ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
 
-    ssh $avai_pc_name@$avai_pc_ip cd $test_folder && RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
+    # ssh $avai_pc_name@$avai_pc_ip "cd ~/Desktop/AutoEnvironment_KC/2022_08_01_VTM11.0_Sub_VVC_random && RunOne.sh -p $task_command >> ${bin_location}/${log_name}" # from the client, run the RunOne.sh with given command to start the compression
+    ssh $avai_pc_name@$avai_pc_ip "cd ~/Desktop/AutoEnvironment_KC/2022_08_01_VTM11.0_Sub_VVC_random && ./RunOne.sh -p '$command'"
+    exit 1
 }
 
 counter=0 # the number of jobs sent to the clients

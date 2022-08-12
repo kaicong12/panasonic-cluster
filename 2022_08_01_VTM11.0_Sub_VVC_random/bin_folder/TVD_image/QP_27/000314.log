@@ -1,1 +1,0 @@
-./EncoderApp -i ../CTC_Dataset/TVD_image/000314.yuv -b bin_folder/TVD_image/QP_27/000314.vvc -q 27 -hgt 1080 -wdt 1920 -c cfg/encoder_intra_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10

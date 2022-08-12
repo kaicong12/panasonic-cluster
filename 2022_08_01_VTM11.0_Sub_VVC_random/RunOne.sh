@@ -9,13 +9,11 @@ if [ "$#" -ne 1 ]; then
 " 
 fi
 
-
 while getopts "p:" OPTION; do
   case "$OPTION" in
     p)
-      chmod u+x encoder
-      ./encoder "$OPTARG"
+      chmod u+x ./EncoderApp
+      ./EncoderApp $OPTARG
       ;;
   esac
 done
-shift "$(($OPTIND-1))"
