@@ -1,6 +1,13 @@
 # VVC AutoEnvironment Cluster Script 
 
 # How to run a custom test
+## Pre-Requisite
+1. Install the sar package in all client PC
+    - `sudo apt install sysstat -y`
+2. Add all client PC's ssh key to the server
+    - Execute `ssh-copy-id client_name@client_ip` on the server and key in the respective client Pc's password
+
+## Tutorial on how to use Cluster Script
 1. Decide on a custom name for the new custom test. (e.g. `2022_08_01_VTM11.0_Sub_VVC_random`)
 2. Create a new folder under directly at the root using the custom name.
 3. Copy the necessary files/folder into the new folder, files to be copied are listed at the [Directories Definition](#directories-definition) section.

@@ -27,7 +27,8 @@ additional_params=(
 )
 
 client_pc=(
-    "user@192.168.1.17"
+    "ubuntu@192.168.121.108"
+    "user@192.168.121.106"
 )
 
 
@@ -44,7 +45,7 @@ if [[ $mode == "full" ]] && [[ ${#qp[@]} -ne 6 ]]; then
     echo "QP list should have exactly 6 QP when using full mode"
     exit 1
 fi
-if [[ $mode != "full" ]] || [[ $mode != "subset" ]]; then
+if [[ $mode != "full" ]] && [[ $mode != "subset" ]]; then
     echo "Script only accepts either 'full' or 'subset' mode"
     exit 1
 fi
@@ -66,16 +67,16 @@ done
 if [[ $mode == "subset" ]]; then
 
     rm -f filtered*
-    num_images=$(wc -l < ../gen_data_table/image_data.txt)
+    num_images=$(wc -l < image_data.txt)
     for data_index in $data_range;
     do  
         # index less than num_images means the current data refers to an image, otherwise its a video file
         if [[ $data_index -le $num_images-1 ]]; then
-            file="../gen_data_table/image_data.txt"
+            file="image_data.txt"
             cur_line="$(grep "^ $data_index" $file)"
             echo $cur_line >> "filtered_image_data.txt"
         else
-            file="../gen_data_table/video_data.txt"
+            file="video_data.txt"
             cur_line="$(grep "^ $data_index" $file)"
             echo $cur_line >> "filtered_video_data.txt"
         fi
@@ -134,15 +135,9 @@ function generate_job() {
         check_job_status $dataset_name $data_name $filtered_qp
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
-                            
-            # update TVD video and images to have the same dataset_name since their YUV files come from the same folder
-            if [[ "$dataset_name" == *"TVD"* ]]; then
-                binfolder="bin_folder/TVD/QP_$qp"
-                yuvfolder="../CTC_Dataset/TVD"
-            else
-                binfolder="bin_folder/$dataset_name/QP_$qp"
-                yuvfolder="../CTC_Dataset/$dataset_name"
-            fi
+            binfolder="bin_folder/$dataset_name/QP_$qp"
+            yuvfolder="../CTC_Dataset/$dataset_name"
+
             # OpenImage binfiles have .266 as extension
             binfile="$binfolder/$data_name.vvc"
             if [[ $dataset_name == "OpenImages" ]]; then
@@ -214,7 +209,7 @@ echo "####### Generated ${#job_array[@]} jobs to be sent to client PC #######"
 
 
 # 5. Distribute each task within job_array to different client pc for compression
-dataset_directory="CTC_YUV" # directory where the raw YUVs are stored in
+dataset_directory="CTC_YUV"
 test_folder=$(realpath ./) # get the absolute path of the shared network test_folder
 
 function sendTask() {
@@ -223,30 +218,33 @@ function sendTask() {
     IFS='%' read -ra task_info <<< "$task" # split the task string with delimiter %
     command=${task_info[0]} 
     bin_location=${task_info[1]} 
-    log_name=${task_info[2]} 
+    log_name=${task_info[2]}
 
-    mkdir -p $bin_location # create the bin_dir recursively
-    echo ./encoder ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
+    mkdir -p $bin_location
+    echo ./EncoderApp ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
 
-    ssh $avai_pc_ip cd $test_folder && RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
+    ssh $avai_pc_name@$avai_pc_ip cd $test_folder && RunOne.sh -p $task_command >> ${bin_location}/${log_name} # from the client, run the RunOne.sh with given command to start the compression
 }
 
 counter=0 # the number of jobs sent to the clients
-while [ $counter -lt ${#job_array[@]} ] # main while loop
+while [ $counter -lt ${#job_array[@]} ]
 do
     request_count=0
-    while true # busy waiting for the available client pc
+    while true
     do
         sleep 2 # request for available client pc every 2 sec
         for pc in "${client_pc[@]}"
         do  
-            pc_info=(${pc//:/ }) # split the pc information
+            pc_info=(${pc//@/ })
             pc_name=${pc_info[0]} 
-            pc_ip=${pc_info[1]} 
-            ./check_cpu.sh $pc_name $pc_ip
+            pc_ip=${pc_info[1]}
+
+            
+            available=$(./check_cpu.sh $pc_name $pc_ip)
             if [ "$available" = true ] # $available comes from check_if_available()
             then
                 echo "Assigned to ${pc_name}"
+                avai_pc_name=$pc_name
                 avai_pc_ip=$pc_ip
                 break 2 # break current for loop and the busy waiting while loop outside, back to the main while loop
             fi
@@ -259,7 +257,7 @@ do
         fi
     done
 
-    sendTask ${job_array[counter]}
+    sendTask "${job_array[$counter]}"
     if [[ ! -f "start.tim" ]]
     then
         touch start.tim
