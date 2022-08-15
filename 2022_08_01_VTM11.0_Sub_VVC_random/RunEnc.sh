@@ -19,25 +19,34 @@ qp_sets=(
 
 declare -A additional_params
 additional_params=(
-    ["FLIR"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1"
-    ["OpenImages"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1"
-    ["SFU_HW"]="-c cfg/encoder_randomaccess_vtm.cfg --ConformanceWindowMode=1 --InternalBitDepth=10"
-    ["TVD_video"]="-c cfg/encoder_randomaccess_vtm.cfg --InputBitDepth=8 --ReconFile=/dev/null --PrintHexPSNR -v 6 --ConformanceWindowMode=1"  # took out -dph 1
-    ["TVD_image"]="-c cfg/encoder_intra_vtm.cfg -fr 1 -f 1 --ConformanceWindowMode=1 --InternalBitDepth=10"
+    ["FLIR"]="-fr 1 -f 1 --ConformanceWindowMode=1"
+    ["OpenImages"]="-fr 1 -f 1 --ConformanceWindowMode=1"
+    ["SFU_HW"]="--ConformanceWindowMode=1 --InternalBitDepth=10"
+    ["TVD_video"]="--InputBitDepth=8 --ReconFile=/dev/null --PrintHexPSNR -v 6 --ConformanceWindowMode=1"  # took out -dph 1
+    ["TVD_image"]="-fr 1 -f 1 --ConformanceWindowMode=1 --InternalBitDepth=10"
 )
 
+declare -A configs
+configs=(
+    ["FLIR"]="cfg/encoder_intra_vtm.cfg"
+    ["OpenImages"]="cfg/encoder_intra_vtm.cfg"
+    ["SFU_HW"]="cfg/encoder_randomaccess_vtm.cfg"
+    ["TVD_video"]="cfg/encoder_randomaccess_vtm.cfg"
+    ["TVD_image"]="cfg/encoder_intra_vtm.cfg"
+)
+
+# server is PC1
 client_pc=(
-    "ubuntu@192.168.121.108"
-    "user@192.168.121.106"
+    "ubuntu@192.168.121.108"  #PC0
+    "ubuntu@192.168.121.104"  #PC2
 )
-
 
 
 # 2. Parse user input
 # mode="full"
 # data_range=()
 mode="subset"
-data_range=$(seq 8480 8495)
+data_range=$(seq 0 299)
 QP=(0 1 2 3 4 5)
 
 # user input validation
@@ -135,8 +144,11 @@ function generate_job() {
         check_job_status $dataset_name $data_name $filtered_qp
         if [[ $sent = false ]]; then
             extra_params=${additional_params["$dataset_name"]}
-            binfolder="bin_folder/$dataset_name/QP_$qp"
+            binfolder="./bin_folder/$dataset_name/QP_$qp"
             yuvfolder="../CTC_YUV_Dataset/$dataset_name"
+
+            # different dataset uses different config files
+            config_file=${configs["$dataset_name"]}
 
             # OpenImage binfiles have .266 as extension
             binfile="$binfolder/$data_name.vvc"
@@ -147,10 +159,10 @@ function generate_job() {
             # new_job differs for image and video, differentiate these 2 by checking the number of input arguments
             if [ "$#" -eq 6 ]; then
                 # arguments equals to 6 means it is a image job
-                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -c $config_file -b $binfile -q $filtered_qp -hgt $height -wdt $width $extra_params%$binfolder%$data_name.log"
             elif [ "$#" -eq 10 ]; then
                 # arguments equals to 10 means it is a video job
-                new_job="-i $yuvfolder/$data_name.yuv -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
+                new_job="-i $yuvfolder/$data_name.yuv -c $config_file -b $binfile -q $filtered_qp -hgt $height -wdt $width --FrameSkip=$frame_skip --FramesToBeEncoded=$frame_num --IntraPeriod=$intra_period --FrameRate=$frame_rate $extra_params%$binfolder%$data_name.log"
             fi
 
             # sanity check to see if new_job is initialized properly
@@ -223,12 +235,11 @@ function sendTask() {
     mkdir -p $bin_location
     echo ./EncoderApp ${command} >> ${bin_location}/${log_name} # write the encoding command into encoder log
 
-    # ssh $avai_pc_name@$avai_pc_ip "cd ~/Desktop/AutoEnvironment_KC/2022_08_01_VTM11.0_Sub_VVC_random && RunOne.sh -p $task_command >> ${bin_location}/${log_name}" # from the client, run the RunOne.sh with given command to start the compression
-    ssh $avai_pc_name@$avai_pc_ip "cd ~/Desktop/AutoEnvironment_KC/2022_08_01_VTM11.0_Sub_VVC_random && ./RunOne.sh -p '$command'"
-    exit 1
+    ssh -f $avai_pc_name@$avai_pc_ip "cd ~/Desktop/AutoEnvironment_KC/2022_08_01_VTM11.0_Sub_VVC_random && mkdir -p $bin_location && ./RunOne.sh -p '$command' >> ${bin_location}/${log_name}"
+
 }
 
-counter=0 # the number of jobs sent to the clients
+counter=0
 while [ $counter -lt ${#job_array[@]} ]
 do
     request_count=0
@@ -241,11 +252,10 @@ do
             pc_name=${pc_info[0]} 
             pc_ip=${pc_info[1]}
 
-            
             available=$(./check_cpu.sh $pc_name $pc_ip)
-            if [ "$available" = true ] # $available comes from check_if_available()
+            if [ "$available" = true ]
             then
-                echo "Assigned to ${pc_name}"
+                echo "Assigned task $counter to ${pc_name}"
                 avai_pc_name=$pc_name
                 avai_pc_ip=$pc_ip
                 break 2 # break current for loop and the busy waiting while loop outside, back to the main while loop
@@ -255,21 +265,21 @@ do
         request_count=$(( $request_count + 1 ))
         if [ $request_count -ge 10 ]
         then
-            break 2 # quit the main while loop if wait for more than 20 sec for the machine
+            break 2 # quit while [ $counter -lt ${#job_array[@]} ] loop if wait for more than 20 sec for the machine
         fi
     done
 
     sendTask "${job_array[$counter]}"
-    if [[ ! -f "start.tim" ]]
+    if [[ ! -f "start.tim" ]]  # this file indicates that this test has started running
     then
         touch start.tim
     fi
-    counter=$(( $counter + 1 )) # move to next task
+    counter=$(( $counter + 1 ))
 done
 
-if [ $counter -eq ${#job_array[@]} ]
+if [[ $counter -eq ${#job_array[@]} ]]
 then
-    touch done.tim # all files have been sent to clients for compression
+    touch done.tim # this file indicates that all files have been sent to clients for compression
 else
     echo "Some task is not sent successfully." # should never be triggered
 fi

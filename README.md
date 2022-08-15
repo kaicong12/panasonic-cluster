@@ -6,6 +6,7 @@
     - `sudo apt install sysstat -y`
 2. Add all client PC's ssh key to the server
     - Execute `ssh-copy-id client_name@client_ip` on the server and key in the respective client Pc's password
+3. The complete CTC_YUV_Dataset has been uploaded to the network folder
 
 ## Tutorial on how to use Cluster Script
 1. Decide on a custom name for the new custom test. (e.g. `2022_08_01_VTM11.0_Sub_VVC_random`)
